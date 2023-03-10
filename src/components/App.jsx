@@ -1,11 +1,10 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import 'react-toastify/dist/ReactToastify.min.css';
-import { ToastContainer } from 'react-toastify';
-import { toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import * as Scroll from 'react-scroll';
 
 import { fetchImages } from '..//services/API';
-import { Searchbar } from './Searchbar/Searchbar';
+import Searchbar from './Searchbar/Searchbar';
 import { Loader } from './Loader/Loader';
 import { ImageGallery } from './ImageGallery/ImageGallery'
 import { Button } from './Button/Button';
@@ -13,80 +12,81 @@ import { Button } from './Button/Button';
 import { GlobalStyle } from "./GlobalStyle";
 import { Layout } from "./Layout";
 
+
 const scroll = Scroll.animateScroll;
 
-export class App extends Component {
-  state={
-    query: '',
-    page: 1,
-    image: [],
-    status: 'idle',
-    showLoadMore: false,
-  }
-
-  async componentDidUpdate(prevProps, prevState) {
-    const { query, page } = prevState;
-    const nextQuery = this.state.query;
-    const nextPage = this.state.page;
+const Status = {
+  IDLE: 'idle',
+  PENDING: 'pending',
+  RESOLVED: 'resolved',
+  REJECTED: 'rejected',
+};
 
 
-    if(query !== nextQuery || page !== nextPage) {
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [image, setImage] = useState([]);
+  const [status, setStatus] = useState(Status.IDLE);
+  const [showLoadMore, setShowLoadMore] = useState(false);
 
-        this.setState({status: 'pending'});
-
-        try {
-            const { hits, totalHits } = await fetchImages(nextQuery, nextPage);
-
-            if(hits.length === 0) {
-              this.setState({ status: 'idel' });
-            }
-
-            this.setState(prevState=>({ image: [...prevState.image, ...hits],
-            showLoadMore: this.state.page < Math.ceil(totalHits / 12)
-            })) 
-        } catch (error) {
-            this.setState({ status: 'rejected' });
-        } finally {
-          this.setState({ status: 'resolved' });
-        }
+  useEffect(() => {
+    if (!query) {
+      return;
     }
-}
+    setStatus(Status.PENDING);
 
-  handleFormSubmit = query =>{
-    this.setState({ query: query,
-    page: 1,
-    image: [], });
+    async function getImages(query, page) {
+      try {
+        const { hits, totalHits } = await fetchImages(query, page);
+
+        if (hits.length === 0) {
+          setStatus(Status.IDLE);
+          return;
+        }
+
+        setImage(prevState => [...prevState, ...hits]);
+        setShowLoadMore(page < Math.ceil(totalHits / 12));
+      } catch (error) {
+        setStatus(Status.REJECTED);
+      } finally {
+        setStatus(Status.RESOLVED);
+      }
+    }
+    getImages(query, page);
+  }, [query, page]);
+
+
+  const handleFormSubmit = query => {
+    setQuery(query);
+    setPage(1);
+    setImage([]);
   };
 
-  handleOnClick = () => {
-    this.setState(prevState => ({ page: prevState.page + 1, }));
+  const handleOnClick = () => {
+    setPage(prevState => (prevState + 1));
     scroll.scrollMore(300);
-  }
+  };
 
 
-  render(){
-    const {status, image, showLoadMore} = this.state;
+  return (
+    <Layout>
+      <GlobalStyle />
+      <Searchbar onSubmit={handleFormSubmit} />
+      {status === Status.IDLE &&
+        toast.error('No results were found for your request')}
 
-    return (
-      <Layout>
-        <GlobalStyle />
+      {status === Status.PENDING && <Loader />}
+      {status === Status.REJECTED &&
+        toast.error('Sorry, something went wrong. Please, try again')}
 
-        <Searchbar onSubmit={this.handleFormSubmit} />
+      <ImageGallery image={image} />
 
-        {status === 'idel' && toast.error('No results were found for your request')}
-        
-        {status === 'pending' && <Loader />}
-
-        {status === 'rejected' && toast.error('Sorry, something went wrong. Please, try again')}
-        
-        {/* {status === 'resolved' && <ImageGallery image={image} />} */}
-        <ImageGallery image={image} />
-        
-        {showLoadMore && <Button onClick={this.handleOnClick} />}
-
-        <ToastContainer autoClose={2000} style = { { width : "400px", fontSize: "16px" } } />
-        
-      </Layout>
-    );
-  }
+      {showLoadMore && <Button onClick={handleOnClick} />}
+      <ToastContainer
+        autoClose={2000}
+        style={{ width: '400px', fontSize: '16px' }}
+      />
+    </Layout>
+  );
 };
