@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import 'react-toastify/dist/ReactToastify.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import * as Scroll from 'react-scroll';
@@ -13,13 +13,12 @@ import { GlobalStyle } from "./GlobalStyle";
 import { Layout } from "./Layout";
 
 
-const scroll = Scroll.animateScroll;
-
 const Status = {
   IDLE: 'idle',
   PENDING: 'pending',
   RESOLVED: 'resolved',
   REJECTED: 'rejected',
+  EMPTY: 'empty',
 };
 
 
@@ -29,6 +28,7 @@ export default function App() {
   const [image, setImage] = useState([]);
   const [status, setStatus] = useState(Status.IDLE);
   const [showLoadMore, setShowLoadMore] = useState(false);
+  const scroll = useRef(() => Scroll.animateScroll.scrollMore(600));
 
   useEffect(() => {
     if (!query) {
@@ -41,8 +41,7 @@ export default function App() {
         const { hits, totalHits } = await fetchImages(query, page);
 
         if (hits.length === 0) {
-          setStatus(Status.IDLE);
-          return;
+          setStatus(Status.EMPTY);
         }
 
         setImage(prevState => [...prevState, ...hits]);
@@ -65,7 +64,7 @@ export default function App() {
 
   const handleOnClick = () => {
     setPage(prevState => (prevState + 1));
-    scroll.scrollMore(300);
+    scroll.current();
   };
 
 
@@ -73,10 +72,12 @@ export default function App() {
     <Layout>
       <GlobalStyle />
       <Searchbar onSubmit={handleFormSubmit} />
-      {status === Status.IDLE &&
-        toast.error('No results were found for your request')}
+      {status === Status.IDLE && (
+        <p>Please enter your query in the search field.</p>
+      )}
 
       {status === Status.PENDING && <Loader />}
+
       {status === Status.REJECTED &&
         toast.error('Sorry, something went wrong. Please, try again')}
 
